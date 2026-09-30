@@ -29,6 +29,11 @@ pub const SYNC_TYPES: &[&str] = &[
     "physicalActivity",
 ];
 
+/// Window for matching a Temp Basal already in Nightscout from another
+/// source. Twiist and Tidepool timestamps for the same basal differ by 1-2 s;
+/// wider would start matching the neighbouring phase of a short basal.
+pub const TEMP_BASAL_DEDUP_WINDOW_MS: i64 = 2_000;
+
 pub struct SyncOptions<'a> {
     pub backfill_days: i64,
     pub dry_run: bool,
@@ -250,6 +255,21 @@ fn post_treatment_with_dedup(ns: &NightscoutClient, t: &Treatment) -> Result<Tre
             Ok(false) => {}
             Err(e) => eprintln!(
                 "[event dedup] lookup failed ({e:#}); posting identifier={:?} anyway",
+                t.base.identifier
+            ),
+        }
+    } else if t.event_type.as_deref() == Some("Temp Basal") {
+        match ns.has_matching_treatment("Temp Basal", t.base.date, TEMP_BASAL_DEDUP_WINDOW_MS) {
+            Ok(true) => {
+                eprintln!(
+                    "[basal dedup] NS already has a Temp Basal near date={}; skipping identifier={:?}",
+                    t.base.date, t.base.identifier
+                );
+                return Ok(TreatmentPost::DedupSkipped);
+            }
+            Ok(false) => {}
+            Err(e) => eprintln!(
+                "[basal dedup] lookup failed ({e:#}); posting identifier={:?} anyway",
                 t.base.identifier
             ),
         }
