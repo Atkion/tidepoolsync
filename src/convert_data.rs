@@ -29,6 +29,9 @@ pub fn convert(record: &Value) -> Result<Converted> {
         "cbg" => cbg_to_entry(record).map(|e| Converted::Entry(Box::new(e))),
         "smbg" => smbg_to_entry(record).map(|e| Converted::Entry(Box::new(e))),
         "bolus" => bolus_to_treatment(record).map(|t| Converted::Treatment(Box::new(t))),
+        "basal" if is_zero_length_suspend(record) => Ok(Converted::Skipped(
+            "basal: zero-length suspend marker, not an actual suspend".into(),
+        )),
         "basal" => basal_to_treatment(record).map(|t| Converted::Treatment(Box::new(t))),
         "food" => food_to_treatment(record).map(|t| Converted::Treatment(Box::new(t))),
         "deviceEvent" => device_event_dispatch(record),
@@ -240,6 +243,15 @@ fn bolus_to_treatment(record: &Value) -> Result<Treatment> {
 // Tidepool deliveryType values include scheduled / temp / automated /
 // suspend. All map to NS Temp Basal except "suspend" which becomes
 // Suspend Pump.
+
+/// Twiist uploads a `suspend` basal with `duration: 0` when delivery resumes
+/// after a gap in its data (e.g. around cassette changes), timestamped at
+/// the resume. Mapping it to Suspend Pump would put a suspend where the pump
+/// actually resumed.
+fn is_zero_length_suspend(record: &Value) -> bool {
+    record.get("deliveryType").and_then(|v| v.as_str()) == Some("suspend")
+        && record.get("duration").and_then(|v| v.as_i64()) == Some(0)
+}
 
 fn basal_to_treatment(record: &Value) -> Result<Treatment> {
     let delivery = record
@@ -648,6 +660,18 @@ mod tests {
             t.base.identifier.as_deref(),
             Some(format!("suspend-{TS_EPOCH_S}").as_str())
         );
+    }
+
+    #[test]
+    fn zero_length_suspend_basal_is_skipped() {
+        let record = json!({
+            "type": "basal",
+            "deliveryType": "suspend",
+            "id": "s0",
+            "time": TS_RFC3339,
+            "duration": 0
+        });
+        assert!(matches!(convert(&record).unwrap(), Converted::Skipped(_)));
     }
 
     #[test]
