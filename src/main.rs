@@ -293,14 +293,14 @@ fn run_daemon(
 
 fn print_stats(s: &sync::SyncStats) {
     eprintln!(
-        "sync: fetched={} entries={}/{} treatments={}/{} skipped={} bolus_dedup_skipped={} convert_errors={}",
+        "sync: fetched={} entries={}/{} treatments={}/{} skipped={} dedup_skipped={} convert_errors={}",
         s.fetched,
         s.entries_ok,
         s.entries_ok + s.entries_fail,
         s.treatments_ok,
         s.treatments_ok + s.treatments_fail,
         s.skipped,
-        s.bolus_dedup_skipped,
+        s.dedup_skipped,
         s.convert_errors,
     );
     if !s.unknown_types.is_empty() {

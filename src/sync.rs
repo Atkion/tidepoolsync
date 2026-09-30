@@ -49,7 +49,7 @@ pub struct SyncStats {
     pub treatments_fail: usize,
     pub skipped: usize,
     /// Treatments skipped because Nightscout already has a fuzzy match.
-    pub bolus_dedup_skipped: usize,
+    pub dedup_skipped: usize,
     pub unknown_types: BTreeMap<String, usize>,
     pub convert_errors: usize,
     /// Newest fetched `time` per Tidepool type.
@@ -178,7 +178,7 @@ fn process_records(
             for r in treatment_results {
                 match r {
                     Ok(TreatmentPost::Posted) => stats.treatments_ok += 1,
-                    Ok(TreatmentPost::DedupSkipped) => stats.bolus_dedup_skipped += 1,
+                    Ok(TreatmentPost::DedupSkipped) => stats.dedup_skipped += 1,
                     Err(e) => {
                         stats.treatments_fail += 1;
                         had_post_failures = true;
