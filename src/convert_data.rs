@@ -244,6 +244,12 @@ fn bolus_to_treatment(record: &Value) -> Result<Treatment> {
 // suspend. All map to NS Temp Basal except "suspend" which becomes
 // Suspend Pump.
 
+/// Exact minutes. Rounding to whole minutes made consecutive basals overlap
+/// or leave gaps of up to 30 s.
+fn ms_to_minutes(ms: i64) -> Decimal {
+    Decimal::from(ms) / Decimal::from(60_000)
+}
+
 /// Twiist uploads a `suspend` basal with `duration: 0` when delivery resumes
 /// after a gap in its data (e.g. around cassette changes), timestamped at
 /// the resume. Mapping it to Suspend Pump would put a suspend where the pump
@@ -272,8 +278,7 @@ fn basal_to_treatment(record: &Value) -> Result<Treatment> {
             duration: record
                 .get("duration")
                 .and_then(|v| v.as_i64())
-                .map(|ms| (ms as f64 / 60_000.0).round())
-                .and_then(f64_to_decimal),
+                .map(ms_to_minutes),
             pre_bolus: None,
             split_now: None,
             split_ext: None,
@@ -289,7 +294,6 @@ fn basal_to_treatment(record: &Value) -> Result<Treatment> {
     }
     let rate = record.get("rate").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let duration_ms = record.get("duration").and_then(|v| v.as_i64()).unwrap_or(0);
-    let duration_min = (duration_ms as f64 / 60_000.0).round();
     Ok(Treatment {
         // Keep deliveryType out of the identifier for cross-tool dedup.
         base: base_shared(record, "basal")?,
@@ -301,7 +305,7 @@ fn basal_to_treatment(record: &Value) -> Result<Treatment> {
         protein: None,
         fat: None,
         insulin: None,
-        duration: f64_to_decimal(duration_min),
+        duration: Some(ms_to_minutes(duration_ms)),
         pre_bolus: None,
         split_now: None,
         split_ext: None,
@@ -672,6 +676,25 @@ mod tests {
             "duration": 0
         });
         assert!(matches!(convert(&record).unwrap(), Converted::Skipped(_)));
+    }
+
+    #[test]
+    fn basal_duration_is_not_rounded_to_whole_minutes() {
+        let record = json!({
+            "type": "basal",
+            "deliveryType": "automated",
+            "id": "b97",
+            "time": TS_RFC3339,
+            "duration": 97_000,
+            "rate": 1.38
+        });
+        let Converted::Treatment(t) = convert(&record).unwrap() else {
+            panic!("expected Treatment");
+        };
+        assert_eq!(
+            t.duration,
+            Some(Decimal::from(97_000) / Decimal::from(60_000))
+        );
     }
 
     #[test]
