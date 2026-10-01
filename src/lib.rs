@@ -3,6 +3,7 @@
 pub mod config;
 pub mod convert;
 pub(crate) mod convert_data;
+pub mod ns_doc;
 pub mod sync;
 pub mod watermark;
 

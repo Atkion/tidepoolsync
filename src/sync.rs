@@ -16,6 +16,7 @@ use serde_json::Value;
 use tidepool::TidepoolClient;
 
 use crate::convert_data::{self, Converted};
+use crate::ns_doc::EntryDocument;
 use crate::watermark;
 
 pub const SYNC_TYPES: &[&str] = &[
@@ -159,7 +160,7 @@ fn process_records(
         Some(ns) => {
             let entry_results: Vec<_> = entries
                 .par_iter()
-                .map(|e| ns.post_document("entries", e))
+                .map(|e| ns.post_document("entries", &EntryDocument(e)))
                 .collect();
             for r in entry_results {
                 match r {
@@ -192,7 +193,7 @@ fn process_records(
             for e in &entries {
                 println!(
                     "[dry-run] POST /api/v3/entries\n{}",
-                    serde_json::to_string_pretty(e).unwrap_or_default()
+                    serde_json::to_string_pretty(&EntryDocument(e)).unwrap_or_default()
                 );
                 stats.entries_ok += 1;
             }
